@@ -1,0 +1,40 @@
+#useDynLib(lmerTest, .registration=TRUE)
+import(lme4)
+importFrom(numDeriv, hessian, grad)
+importFrom(plyr, llply)
+import(Matrix)
+import(methods)
+importFrom(MASS, ginv)
+import(Hmisc)
+importFrom(gplots, barplot2)
+#import(pbkrtest)
+#importFrom(stats, step)
+
+
+exportClasses(merModLmerTest)
+
+
+export(rand)
+export(lsmeans)
+export(difflsmeans)
+export(step)
+export(lmer)
+
+
+
+
+
+exportMethods("anova", "summary")
+
+#S3method(step, merModLmerTest)
+#export(step.merModLmerTest)
+S3method(print, step)
+S3method(plot, step)
+S3method(print, rand)
+S3method(print, lsmeans)
+S3method(plot, lsmeans)
+S3method(print, difflsmeans)
+S3method(plot, difflsmeans)
+
+
+
