@@ -1,3 +1,6 @@
+## Rune's functions for calculating gradient and hessian
+## faster than hessian and grad functions from numDeriv package
+
 deriv12 <- function(fun, x, delta=1e-4, fx=NULL, ...) {
 ### Compute gradient and Hessian at the same time (to save computing
 ### time)

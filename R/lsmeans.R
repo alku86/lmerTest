@@ -2,6 +2,74 @@
 ## LSMEANS and DIFFLSMEANS related functions
 ################################################################################
 
+lsmeans.calc <- function(model, alpha, test.effs = NULL, 
+                         lsmeansORdiff = TRUE, ddf = "Satterthwaite"){
+  rho <- new.env(parent = emptyenv()) ## environment containing info about model
+  rho <- rhoInit(rho, model, TRUE) ## save lmer outcome in rho envir variable
+  rho$A <- calcApvar(rho) ## asymptotic variance-covariance matrix for theta and sigma
+  result <- list(summ.data = NA, response = NA)
+  result$summ.data <- calcLSMEANS(rho, alpha, 
+                             test.effs,
+                             lsmeansORdiff, ddf)$summ.data
+  result$response <- rownames(attr(terms(rho$model),"factors"))[1]
+  result
+}
+
+
+
+################################################################################
+## calculate LSMEANS DIFFS and CI for all effects
+################################################################################
+calcLSMEANS <- function(rho, alpha, test.effs = NULL, 
+                        lsmeansORdiff = TRUE, ddf = "Satterthwaite")
+{  
+  m <- refitLM(rho$model)
+  effs <- attr(terms(m),"term.labels")
+  if(!is.null(test.effs))
+    effs <- effs[effs %in% test.effs]
+  dclass <- attr(terms(m),"dataClasses")
+  facs <- names(dclass[which(dclass=="factor")])
+  ## get standard deviation of random parameters from model
+  std.rand <- c(unlist(lapply(VarCorr(rho$model), function(x) attr(x,"stddev"))), 
+                attr(VarCorr(rho$model), "sc"))^2 #as.numeric(rho$s@REmat[,3])
+  
+  ## init lsmeans summary
+  if(lsmeansORdiff)
+  {
+    lsmeans.summ <-  matrix(ncol=length(facs)+7,nrow=0)
+    colnames(lsmeans.summ) <- c(facs,"Estimate","Standard Error", "DF", 
+                                "t-value", "Lower CI", "Upper CI", "p-value")
+    summ.data <- as.data.frame(lsmeans.summ)
+    
+  }
+  else
+  {
+    ## init diff summary
+    diff.summ <-  matrix(ncol=7,nrow=0)
+    colnames(diff.summ) <- c("Estimate","Standard Error", "DF", "t-value", 
+                             "Lower CI", "Upper CI", "p-value")
+    summ.data <- as.data.frame(diff.summ)
+  }
+  
+  for(eff in effs)
+  {
+    split.eff  <-  unlist(strsplit(eff,":"))
+    if(checkAllCov(split.eff, rho$data))
+      next
+    mat  <-  popMatrix(m, split.eff)
+    fac.comb <- getFacCombForLSMEANS(split.eff, rho$data)  
+    
+    if(!lsmeansORdiff)
+      summ.data <- rbind(summ.data,   calcDiffsForEff(facs, fac.comb, split.eff,
+                                                      eff, effs, rho, alpha,
+                                                      mat, ddf))
+    else
+      summ.data <- rbind(summ.data,   calcLsmeansForEff(lsmeans.summ, fac.comb, 
+                                                        eff, split.eff, alpha, 
+                                                        mat, rho, facs, ddf))
+  }
+  return(list(summ.data = summ.data))
+}
 
 
 ################################################################################
@@ -150,6 +218,10 @@ popMatrix <- function(object, effect=NULL, at=NULL, only.at=TRUE){
   res 
 }
 
+################################################################################
+################################################################################
+
+
 ###################################################################
 #get the combinatoion of the fixed factors for the lsmeans
 ###################################################################
@@ -236,14 +308,23 @@ convertNumsToFac <- function(data, begin, end)
 ###################################################################
 #fills the LSMEANS and DIFF summary matrices
 ###################################################################
-fillLSMEANStab <- function(mat, rho, summ.eff, nfacs, alpha)
+fillLSMEANStab <- function(mat, rho, summ.eff, nfacs, alpha, ddf = "Satterthwaite")
 {
 
   newcln <- colnames(mat)[colnames(mat) %in% names(rho$fixEffs)]
-  mat <- matrix(mat[,colnames(mat) %in% names(rho$fixEffs)], nrow=nrow(mat), ncol=length(newcln), dimnames=list(rownames(mat),  newcln))
+  mat <- matrix(mat[,colnames(mat) %in% names(rho$fixEffs)], nrow=nrow(mat), 
+                ncol=length(newcln), dimnames=list(rownames(mat),  newcln))
   estim.lsmeans <- mat %*% rho$fixEffs
   summ.eff[,nfacs+1] <- estim.lsmeans  
-  ttest.res <- calculateTtestJSS(rho, t(mat), nrow(mat))
+
+  if(ddf == "Satterthwaite")
+    ttest.res <- aaply(t(mat), .margins=2,
+                  .fun = calcSatterth1DF, rho = rho, isF = FALSE)
+  else
+    ttest.res <- aaply(t(mat), .margins=2,
+                       .fun = calcKR1DF, rho = rho)
+  if(is.vector(ttest.res))
+    ttest.res <- t(as.matrix(ttest.res))
 
   summ.eff[,nfacs+2] <- ttest.res[,4]#stdErrLSMEANS(rho, std.rand, mat)
   #df
@@ -291,6 +372,17 @@ calc.cols <- function(x)
   return("grey")
 }
 
+calc.cols2 <- function(x)
+{
+  if(x<0.001) 
+    return("p-value < 0.001")#return("red")# 
+  if(x<0.01) 
+    return("p-value < 0.01")#return("orange")# 
+  if(x<0.05) 
+    return("p-value < 0.05")#return("yellow")# 
+  return("NS")#return("grey")#
+}
+
 #get names for ploting barplots for the effects
 getNamesForPlot <- function(names, ind)
 {
@@ -305,10 +397,10 @@ getNamesForPlot <- function(names, ind)
   return(list(namesForPlot=namesForPlot, namesForLevels=namesForLevels))
 }
 
-#plots for LSMEANS or DIFF of LSMEANS
+## plots for LSMEANS or DIFF of LSMEANS
 plotLSMEANS <- function(table, response, 
                         which.plot=c("LSMEANS", "DIFF of LSMEANS"), 
-                        main = NULL, cex = 1.4, effs = NULL)
+                        main = NULL, cex = 1.4, effs = NULL, mult = TRUE)
 {
   
   if(!is.null(effs)){
@@ -333,65 +425,60 @@ plotLSMEANS <- function(table, response,
   un.names <- unique(namesForPlot)
   
   
-  for(i in 1:length(un.names))
-  {
-    inds.eff <- namesForPlot %in% un.names[i]
-    split.eff  <-  unlist(strsplit(un.names[i],":"))
-    col.bars <-  lapply(table[inds.eff,][,"p-value"], calc.cols)
-      
-    layout(matrix(c(rep(2,2),3,rep(2,2),3,rep(2,2),3, rep(1,2),3), 4, 3, 
-                  byrow = TRUE), 
-           heights=c(0.2, 1 , 1.2), widths = c(3, 3, 2.5))
-    plot.new()
-    if(which.plot == "LSMEANS")
-      barplot2(table[inds.eff,"Estimate"],col=unlist(col.bars), 
-               ci.l=table[inds.eff,ncol(table)-2], 
-               ci.u=table[inds.eff,ncol(table)-1], plot.ci=TRUE, 
-               names.arg=namesForLevels[inds.eff], 
-               ylab=response, 
-               main = ifelse(!is.null(main), main, 
-                             paste("Least squares means with 95% confidence intervals for \n", 
-                                   un.names[i])), las=2, cex.names = cex,
-               cex.axis = cex, cex.main = cex, cex.lab = cex, font.lab = 2)
-    else
-      barplot2(table[inds.eff,"Estimate"],col=unlist(col.bars), 
-               ci.l=table[inds.eff,ncol(table)-2], 
-               ci.u=table[inds.eff,ncol(table)-1], plot.ci=TRUE, 
-               names.arg=namesForLevels[inds.eff], 
-               ylab=response, 
-               main = ifelse(!is.null(main), main, 
-                             paste("Differences of least squares means \n with 95% confidence intervals for \n", un.names[i])), las=2, cex.names = cex,
-               cex.axis = cex, cex.main = cex, cex.lab = cex, font.lab = 2)
-    
-    plot.new()
-    legend("topright", c("ns","p < 0.05", "p < 0.01", "p < 0.001"), pch=15, 
-           col=c("grey","yellow","orange","red"), title="Significance", 
-           bty="n", cex=cex)
-    if(which.plot=="LSMEANS")
-    {
-      if(length(split.eff)==2)
-      {
-        par(mfrow=c(1,1))
-        #windows()
-        interaction.plot(table[inds.eff,split.eff[1]], 
-                         table[inds.eff,split.eff[2]], 
-                         table[inds.eff,"Estimate"], 
-                         xlab=split.eff[1], ylab=response, 
-                         trace.label=paste(split.eff[2]), 
-                         main="2-way Interaction plot", 
-                         col=1:nlevels(table[inds.eff,split.eff[2]]))
-      }
-    }             
+  ### changed code to transfer to ggplot
+  ttplot <- table
+  ttplot$namesforplots <- namesForPlot
+  ttplot$levels <- as.factor(namesForLevels)
+  colnames(ttplot)[which(colnames(ttplot)=="p-value")] <- "pvalue"
+  colnames(ttplot)[which(colnames(ttplot)=="Lower CI")] <- "lci"
+  colnames(ttplot)[which(colnames(ttplot)=="Upper CI")] <- "uci"
+  ttplot$col.bars <-  unlist(lapply(ttplot[,"pvalue"], calc.cols2))
+  ttplot <- ttplot[,c("levels", "Estimate", "col.bars", "lci", "uci", 
+                      "namesforplots")]
+  uci <- lci <- col.bars <- Estimate <- NULL
+  
+  if(mult)
+    ggplot(ttplot, aes(x=levels, y = Estimate, fill = col.bars)) + 
+    geom_bar(position = "dodge", stat = "identity") +  
+    geom_errorbar(aes(ymin = lci, ymax = uci ), colour="black", width=.1) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.4), 
+          axis.title.y = element_text(size = rel(1.4)), 
+          axis.text = element_text(size = rel(1)), 
+          legend.text = element_text(size = rel(1)), 
+          legend.title = element_text(size = rel(1)))  + 
+    scale_fill_manual(values  = 
+                        c(  "NS" = "grey", "p-value < 0.01" = "orange", 
+                            "p-value < 0.05" = "yellow", 
+                            "p-value < 0.001" = "red"), name="Significance")  +
+    ylab(response) + facet_wrap( ~ namesforplots, scales = "free")
+  else{
+    for(i in 1:length(un.names)){
+      names.plot <- un.names[i]
+      subplot <- ttplot[ttplot$namesforplots == names.plot,]
+      ggplot(subplot, aes(x=levels, y = Estimate, fill = col.bars)) + 
+        geom_bar(position = "dodge", stat = "identity") +  
+        geom_errorbar(aes(ymin = lci, ymax = uci ), colour="black", width=.1) + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.4), 
+              axis.title.y = element_text(size = rel(1.4)), 
+              axis.text = element_text(size = rel(1)), 
+              legend.text = element_text(size = rel(1)), 
+              legend.title = element_text(size = rel(1)))  + 
+        scale_fill_manual(values  = 
+                            c(  "NS" = "grey", "p-value < 0.01" = "orange", 
+                                "p-value < 0.05" = "yellow", 
+                                "p-value < 0.001" = "red"), name="Significance")  +
+        ylab(response) + xlab(names.plot)
+    }
   }
 }
 
 
 
-#calculate DIFFERENCES OF LSMEANS and STDERR for effect
-calcDiffsForEff <- function(facs, fac.comb, split.eff, eff, effs, data, rho, 
-                            alpha, mat)
+## calculate DIFFERENCES OF LSMEANS and STDERR for effect
+calcDiffsForEff <- function(facs, fac.comb, split.eff, eff, effs, rho, 
+                            alpha, mat, ddf)
 {
-  ###calculating diffs for 2 way interaction
+  ## calculating diffs for 2 way interaction
   if(length(split.eff)>=1 && length(split.eff)<=2)
   {   
     if(length(split.eff)==2)
@@ -427,17 +514,16 @@ calcDiffsForEff <- function(facs, fac.comb, split.eff, eff, effs, data, rho,
     rownames(diffs.summ) <- rownames(mat.diffs)
     
     diffs.summ <- as.data.frame(fillLSMEANStab(mat.diffs, rho, diffs.summ, 0, 
-                                               alpha))
+                                               alpha, ddf))
     return(roundLSMEANStab(diffs.summ, 0))
   }
-  
 }
 
 
 
-#calculate LSMEANS and STDERR for effect
+## calculate LSMEANS and STDERR for effect
 calcLsmeansForEff <- function(lsmeans.summ, fac.comb, eff, split.eff, alpha, mat, 
-                              rho, facs)
+                              rho, facs, ddf)
 {
   
   summ.eff <- matrix(NA, ncol=ncol(lsmeans.summ), nrow=nrow(fac.comb))
@@ -446,7 +532,7 @@ calcLsmeansForEff <- function(lsmeans.summ, fac.comb, eff, split.eff, alpha, mat
   summ.eff[,split.eff] <- fac.comb
   names.arg <- concatLevs(summ.eff[,split.eff])
   summ.eff <- as.data.frame(fillLSMEANStab(mat, rho, summ.eff, length(facs), 
-                                           alpha))
+                                           alpha, ddf))
   summ.eff <- convertFacsToNum(summ.eff, length(facs)+1, ncol(summ.eff))
   
   summ.eff <- roundLSMEANStab(summ.eff, length(facs))
@@ -457,64 +543,31 @@ calcLsmeansForEff <- function(lsmeans.summ, fac.comb, eff, split.eff, alpha, mat
 }
 
 
-
-###################################################################
-#calculate LSMEANS DIFFS and CI for all effects
-###################################################################
-calcLSMEANS <- function(model, data, rho, alpha, test.effs = NULL, 
-                        lsmeansORdiff = TRUE, 
-                        l.lmerTest.private.contrast)
-{  
+## refit model to lm in order to use popMatrix function
+refitLM <- function(obj) {
+  mm <- model.matrix(obj)
+  l.lmerTest.private.contrast <- attr(mm,"contrasts")
+  contr <- l.lmerTest.private.contrast
+  mm2 <- model.frame(obj)
+  colnames(mm2)[1] <- "y"
+  fo <- getFormula(obj, withRand = FALSE) ## formula(obj,fixed.only=TRUE)
+  #l.lmerTest.private.contrast <- attr(mm, "contrasts")
+  #contr <- l.lmerTest.private.contrast
   
- 
-  #####################################
-  m <- refitLM(model, l.lmerTest.private.contrast)
- 
-  effs <- attr(terms(m),"term.labels")
-  if(!is.null(test.effs))
-    effs <- effs[effs %in% test.effs]
-  dclass <- attr(terms(m),"dataClasses")
-  facs <- names(dclass[which(dclass=="factor")])
-  #Get standard deviation of random parameters from model
-  std.rand <- c(unlist(lapply(VarCorr(model), function(x) attr(x,"stddev"))), 
-                attr(VarCorr(model), "sc"))^2 #as.numeric(rho$s@REmat[,3])
-  
-  
-  #init lsmeans summary
-  if(lsmeansORdiff)
+  ## change contrasts for F tests calculations
+  ## list of contrasts for factors
+  if(length(which(unlist(contr)!="contr.SAS")) > 0)
   {
-    lsmeans.summ <-  matrix(ncol=length(facs)+7,nrow=0)
-    colnames(lsmeans.summ) <- c(facs,"Estimate","Standard Error", "DF", "t-value",
-                                "Lower CI", "Upper CI", "p-value")
-    summ.data <- as.data.frame(lsmeans.summ)
+    names.facs <- names(contr)
+    l.lmerTest.private.contrast <- as.list(rep("contr.SAS", length(names.facs)))
+    names(l.lmerTest.private.contrast) <- names(contr)
   }
-  else
-  {
-    #init diff summary
-    diff.summ <-  matrix(ncol=7,nrow=0)
-    colnames(diff.summ) <- c("Estimate","Standard Error", "DF", "t-value", 
-                             "Lower CI", "Upper CI", "p-value")
-    summ.data <- as.data.frame(diff.summ)
-  }
-  
-  
-  for(eff in effs)
-  {
-    
-    split.eff  <-  unlist(strsplit(eff,":"))
-    if(checkAllCov(split.eff, data))
-      next
-    mat  <-  popMatrix(m, split.eff)
-    fac.comb <- getFacCombForLSMEANS(split.eff, data)  
-    
-    if(!lsmeansORdiff)
-      summ.data <- rbind(summ.data,   calcDiffsForEff(facs, fac.comb, split.eff,
-                                                      eff, effs, data, rho, alpha,
-                                                      mat))
-    else
-      summ.data <- rbind(summ.data,   calcLsmeansForEff(lsmeans.summ, fac.comb, 
-                                                        eff, split.eff, alpha, 
-                                                        mat, rho, facs))
-  }
-  return(list(summ.data = summ.data))
+  # if(fo != as.formula(.~.))
+  # {
+  #   inds <-  names(l.lmerTest.private.contrast) %in% attr(terms(fo), "term.labels")
+  #   ## update contrast l
+  #   l.lmerTest.private.contrast <- l.lmerTest.private.contrast[inds]
+  # }
+  fo <- update(fo, y ~ .)
+  lm(fo, data=mm2, contrasts = l.lmerTest.private.contrast)
 }
