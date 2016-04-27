@@ -201,8 +201,8 @@ setMethod("summary", signature(object = "merModLmerTest"),
 calcSatterth <- function(model, L){
   if(!inherits(model, "lmerMod"))
     stop("The model is not linear mixed effects model")
-  rho <- new.env(parent = emptyenv()) ## environment containing info about model
-  rho <- rhoInit(rho, model, FALSE) ## save lmer outcome in rho envir variable
+  rho <- list()  ## vector containing info about model
+  rho <- rhoInit(rho, model) ## save lmer outcome in rho vactor
   rho$A <- calcApvar(rho)
   calcSatt(rho, L, calcSS = FALSE)
 }

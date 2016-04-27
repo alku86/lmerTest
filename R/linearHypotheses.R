@@ -1,25 +1,3 @@
-######################################################################################
-## Functions related to the calculation of the contrast matrices used in t and F tests 
-######################################################################################
-changeContrastsToSAS <- function(model){
-  ## update contrasts for anova or step methods
-  mm <- model.matrix(model)
-  l.lmerTest.private.contrast <- attr(mm,"contrasts")
-  contr <- l.lmerTest.private.contrast
-
-  ## change contrasts for F tests calculations
-  ## list of contrasts for factors
-  if(length(which(unlist(contr)!="contr.SAS")) > 0)
-  {
-    names.facs <- names(contr)
-    l.lmerTest.private.contrast <- as.list(rep("contr.SAS",length(names.facs)))
-    names(l.lmerTest.private.contrast) <- names(contr)
-    model <- updateModel(model, .~., getREML(model), 
-                         l.lmerTest.private.contrast) 
-  }
-  list(model = model, l.lmerTest.private.contrast = l.lmerTest.private.contrast)
-}
-
 ################################################################################       
 ## type 3 hypothesis SAS
 ################################################################################
@@ -182,14 +160,15 @@ createDesignMat <- function(rho)
   model.term <- terms(rho$model)
   fixed.term <- attr(model.term,"term.labels") 
   X.design <- names.design.mat <-  names.design <- NULL
+  dd <- model.frame(rho$model) 
   
   for(i in 1:length(fixed.term))
   {
     formula.term <- as.formula(paste("~", fixed.term[i], "- 1"))
-    X.design <- cbind(X.design, model.matrix(formula.term, rho$data))
+    X.design <- cbind(X.design, model.matrix(formula.term, dd))
     names.design.mat <- c(names.design.mat, 
                           rep(fixed.term[i],
-                          ncol(model.matrix(formula.term, rho$data))))
+                          ncol(model.matrix(formula.term, dd))))
   }
   
   if(attr(model.term, "intercept") != 0){

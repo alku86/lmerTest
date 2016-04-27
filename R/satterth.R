@@ -150,7 +150,7 @@ calcSatterthMultDF <- function(rho, Lc){
 ## calculates asymptotic variance covariance matrix of variance parameters based on theta
 calcApvar <- function(rho){
   ## based on theta parameters and sigma
-  dd <- devfunTheta(rho$model,  getME(rho$model, "is_REML"))
+  dd <- devfunTheta(rho$model)
   h <- myhess(dd, c(rho$thopt, sigma = rho$sigma))  
   
   ch <- try(chol(h), silent=TRUE)
@@ -171,7 +171,7 @@ calcApvar <- function(rho){
 
 
 ## devfun function as a function of optimal parameters
-devfunTheta <- function (fm,  reml = TRUE) 
+devfunTheta <- function (fm) 
 {
   stopifnot(is(fm, "merMod"))
   
@@ -181,11 +181,8 @@ devfunTheta <- function (fm,  reml = TRUE)
     np <- np + 1L
   n <- nrow(fm@pp$V)
   
-  
-  ## why not use update?
-  ff <- updateModel(fm, .~., getREML(fm), 
-                    attr(model.matrix(fm),"contrasts"), 
-                    devFunOnly.lmerTest.private = TRUE) 
+  ff <- updateModel(fm, devFunOnly = TRUE)
+  reml <- getME(fm, "is_REML")
   
   envff <- environment(ff)
   
@@ -225,10 +222,9 @@ vcovLThetaL <- function(fm)
   if (!isGLMM(fm)) 
     np <- np + 1L
   
-  ff2 <- updateModel(fm, .~., getREML(fm), 
-                     attr(model.matrix(fm),"contrasts"), 
-                     devFunOnly.lmerTest.private = TRUE) 
-  
+
+  ff2 <- updateModel(fm, devFunOnly = TRUE) 
+
   envff2 <- environment(ff2)
   
   if (isLMM(fm)) {
@@ -256,15 +252,11 @@ vcovTheta <- function(fm)
   stopifnot(is(fm, "merMod"))
   
   np <- length(fm@pp$theta)
-  nf <- length(fixef(fm))
   if (!isGLMM(fm)) 
     np <- np + 1L
   
   
-  ff2 <- updateModel(fm, .~., getREML(fm), 
-                     attr(model.matrix(fm),"contrasts"), 
-                     devFunOnly.lmerTest.private = TRUE) 
-  
+  ff2 <- updateModel(fm, devFunOnly = TRUE) 
   envff2 <- environment(ff2)
   
   if (isLMM(fm)) {
@@ -273,7 +265,6 @@ vcovTheta <- function(fm)
       
       sigma2 <- thpars[np]^2
       ff2(thpars[-np])
-      
       
       #.Call("lmer_Deviance", pp$ptr(), resp$ptr(), thpars[-np], PACKAGE = "lme4")      
       vcov_out <- sigma2 * tcrossprod(envff2$pp$RXi()) 

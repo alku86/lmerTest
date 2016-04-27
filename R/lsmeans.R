@@ -4,7 +4,7 @@
 
 lsmeans.calc <- function(model, alpha, test.effs = NULL, 
                          lsmeansORdiff = TRUE, ddf = "Satterthwaite"){
-  rho <- new.env(parent = emptyenv()) ## environment containing info about model
+  rho <- list() ## environment containing info about model
   rho <- rhoInit(rho, model, TRUE) ## save lmer outcome in rho envir variable
   rho$A <- calcApvar(rho) ## asymptotic variance-covariance matrix for theta and sigma
   result <- list(summ.data = NA, response = NA)
@@ -33,6 +33,8 @@ calcLSMEANS <- function(rho, alpha, test.effs = NULL,
   std.rand <- c(unlist(lapply(VarCorr(rho$model), function(x) attr(x,"stddev"))), 
                 attr(VarCorr(rho$model), "sc"))^2 #as.numeric(rho$s@REmat[,3])
   
+  dd <- model.frame(rho$model) 
+  
   ## init lsmeans summary
   if(lsmeansORdiff)
   {
@@ -54,10 +56,10 @@ calcLSMEANS <- function(rho, alpha, test.effs = NULL,
   for(eff in effs)
   {
     split.eff  <-  unlist(strsplit(eff,":"))
-    if(checkAllCov(split.eff, rho$data))
+    if(checkAllCov(split.eff, dd))
       next
     mat  <-  popMatrix(m, split.eff)
-    fac.comb <- getFacCombForLSMEANS(split.eff, rho$data)  
+    fac.comb <- getFacCombForLSMEANS(split.eff, dd)  
     
     if(!lsmeansORdiff)
       summ.data <- rbind(summ.data,   calcDiffsForEff(facs, fac.comb, split.eff,

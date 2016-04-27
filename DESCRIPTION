@@ -9,7 +9,7 @@ Authors@R: c(person("Alexandra", "Kuznetsova", role = c("aut", "cre"),
 Maintainer: Alexandra Kuznetsova <alku@dtu.dk>
 Depends: R (>= 3.0.0), Matrix, stats, methods, lme4 (>= 1.0)
 Imports: plyr, MASS, Hmisc, ggplot2
-Suggests: pbkrtest
+Suggests: pbkrtest, nlme
 Description: Different kinds of tests for linear mixed effects models as implemented 
     in 'lme4' package are provided. The tests comprise types I - III F tests 
     for fixed effects, LR tests for random effects. 

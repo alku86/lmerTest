@@ -336,13 +336,14 @@ saveInfoForTerm <- function(term, chisq, chisq.df, pv, model.red = NULL)
 
 
 ## create reduce slopes model
-createModelRedSlopes <- function(x, term, fm, model, l.lmerTest.private.contrast)
+createModelRedSlopes <- function(x, term, fm, model)
 {
-  fm[3] <- paste(fm[3], "-", term, "+" , paste(x,collapse="+"))
+  fm[3] <- paste(fm[3], "-", term, "+" , paste(x, collapse="+"))
   mf.final <-  as.formula(paste(fm[2],fm[1],fm[3], sep=""))
   mf.final <- update.formula(mf.final,mf.final)
-  model.red <- updateModel(model, mf.final, getME(model, "is_REML"), 
-                           l.lmerTest.private.contrast)
+  model.red <- updateModel(model, mf.final, change.contr = FALSE)
+  # model.red <- update(model, formula = mf.final, 
+  #                     contrasts = l.lmerTest.private.contrast)
   return(model.red)
 }
 
@@ -370,7 +371,7 @@ checkPresRandTerms <- function(mf.final)
 checkCorr <- function(model)
 {
   corr.intsl <- FALSE
-  modelST <- getST(model)
+  modelST <- getME(model, "ST")
   lnST <- length(modelST)
   for(i in 1:lnST)
   {    

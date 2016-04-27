@@ -3,8 +3,8 @@ calcANOVA <- function(model, ddf = "Satterthwaite", type = 3, change.contr = TRU
   if(!(type %in% c(1,2,3)))  
     stop('Parameter type is wrongly specified') ## check type of hypothesis
   
-  rho <- new.env(parent = emptyenv()) ## environment containing info about model
-  rho <- rhoInit(rho, model, change.contr) ## save lmer outcome in rho envir variable
+  rho <- list() ## environment containing info about model
+  rho <- rhoInit(rho, model, TRUE) ## save lmer outcome in rho envir variable
 
   if(ddf == "Satterthwaite")
     rho$A <- calcApvar(rho) ## asymptotic variance-covariance matrix for theta and sigma  
@@ -29,7 +29,7 @@ calcANOVA <- function(model, ddf = "Satterthwaite", type = 3, change.contr = TRU
 ## calculate t test for the summary function for lmerMod object
 calcSummary <- function(model, ddf = "Satterthwaite"){
   
-  rho <- new.env(parent = emptyenv()) ## environment containing info about model
+  rho <- list() ## vector containing info about model
   rho <- rhoInit(rho, model, FALSE) ## save lmer outcome in rho envir variable
   
   if(ddf == "Satterthwaite")
@@ -77,7 +77,7 @@ calcFpvalueSS <- function(Lc, rho, ddf, type)
 ################################################################################
 ## function to calculate F stat and pvalues for a given term. MAIN
 ################################################################################
-calcFpvalueMAIN <- function(term, L, X, rho, ddf, type)
+calcFpvalueMAIN <- function(term, L, rho, ddf, type)
 {
   if(type == 3)
   {

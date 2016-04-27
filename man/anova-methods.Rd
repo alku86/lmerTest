@@ -69,6 +69,7 @@ anova(m.ham, ddf = "lme4")
 \dontrun{
 fm2 <- lmer(Preference ~ sens2 + I(sens1^2)  +
                            (1+sens2|Consumer), data=carrots)
+anova(fm2)
 }
 }
 }

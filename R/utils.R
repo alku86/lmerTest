@@ -1,58 +1,16 @@
-getY <- function(model)
-{
-    return(getME(model, "y"))
-}
-getX <- function(model)
-{
-    return(getME(model, "X"))
-}
-getZt <- function(model)
-{
-    Ztlist <- getME(model, "Ztlist")
-    return(do.call(rBind,Ztlist))
-}
-getST <- function(model)
-{
-    return(getME(model, "ST"))
-}
-
 
 ##########################################################################
-# Create rho environmental variable of mixed model ####################### 
+## Create rho vector containing info about  mixed model ##################
 ##########################################################################
-rhoInit <- function(rho, model, change.contr = TRUE)
+rhoInit <- function(rho, model, change.contr = FALSE, mf.final = NULL)
 {
-  ## creating rho environment that will contain info about model
-  ## create an empty environment
-  if(change.contr){
-    resSAS <- changeContrastsToSAS(model)
-    rho$model <- resSAS$model
-    rho$contr <- resSAS$l.lmerTest.private.contrast
-  }
+  if(change.contr)
+    rho$model <- updateModel(model, mf.final = mf.final, change.contr = change.contr)
   else
     rho$model <- model
-  rho$data <- model.frame(rho$model) 
-  rho$y <- getY(rho$model) #model@y                   
-  rho$X <- getX(rho$model) #model@X
-  chol(rho$XtX <- crossprod(rho$X))  # check for full column rank
-  
-  rho$REML <-  getREML(rho$model)
-  if(class(rho$model) == "lmerMod") 
-    rho$s <- summary(rho$model)
-  
   rho$fixEffs <- fixef(rho$model)
   rho$sigma <- sigma(rho$model)
-  rho$vlist <- sapply(rho$model@cnms, length)
-  
-  
-  ## get the optima
-  #pp <- model@pp$copy()  
-  #opt <- Cv_to_Vv(pp$theta, n = vlist, s = rho$sigma)
-  #rho$opt <- opt
   rho$thopt <- getME(rho$model, "theta")
-  #rho$param <- as.data.frame(VarCorr(model))[, "sdcor"]
-  #rho$vars <- Cv_to_Vv(rho$thopt, n = rho$vlist, 
-  #             s = rho$sigma)
   return(rho)  
 }
 
@@ -123,32 +81,82 @@ getREML <- function(model)
 }
 
 #update model
-updateModel <- function(model, mf.final, reml.lmerTest.private, 
-                        l.lmerTest.private.contrast, 
-                        devFunOnly.lmerTest.private = FALSE)
-{
-  if(!mf.final == as.formula(paste(".~.")))
-  {
-    inds <-  names(l.lmerTest.private.contrast) %in% attr(terms(as.formula(mf.final)), 
-                                                          "term.labels")
-     #update contrast l.lmerTest.private.contrast
-    l.lmerTest.private.contrast <- l.lmerTest.private.contrast[inds]
+# updateModel <- function(model, mf.final, reml.lmerTest.private,
+#                         l.lmerTest.private.contrast,
+#                         devFunOnly.lmerTest.private = FALSE)
+# {
+#   if(!mf.final == as.formula(paste(".~.")))
+#   {
+#     inds <-  names(l.lmerTest.private.contrast) %in% attr(terms(as.formula(mf.final)),
+#                                                           "term.labels")
+#      #update contrast l.lmerTest.private.contrast
+#     l.lmerTest.private.contrast <- l.lmerTest.private.contrast[inds]
+#   }
+# 
+#  data.update.lmerTest.private <- model.frame(model)
+#  nfit <- update(object=model, formula.=mf.final, REML=reml.lmerTest.private ,
+#                 contrasts=l.lmerTest.private.contrast,
+#                 devFunOnly = devFunOnly.lmerTest.private,
+#                 data = data.update.lmerTest.private, subset = NULL,
+#                 evaluate=FALSE)
+#  env <- environment(formula(model))
+#  assign("l.lmerTest.private.contrast", l.lmerTest.private.contrast, envir=env)
+#  assign("reml.lmerTest.private", reml.lmerTest.private, envir=env)
+#  assign("devFunOnly.lmerTest.private", devFunOnly.lmerTest.private, envir=env)
+#  assign("data.update.lmerTest.private", data.update.lmerTest.private, envir=env)
+#  nfit <- eval(nfit, envir = env)
+#  return(nfit)
+# }
+
+
+updateModel <- function(object, mf.final = NULL, ..., change.contr = FALSE) {
+  if (is.null(call <- getCall(object)))
+    stop("object should contain a 'call' component")
+  extras <- match.call(expand.dots = FALSE)$...
+  if (!is.null(mf.final))
+    call$formula <- update.formula(formula(object), mf.final)
+  if(any(grepl("sample", call))){
+    call <- as.list(call)[-which(names(as.list(call)) %in% c("data", "subset"))]
+    call[["data"]] <- quote(model.frame(object))
   }
- 
- #data.update.lmerTest.private <- model.frame(model)  
- nfit <- update(object=model, formula.=mf.final, REML=reml.lmerTest.private ,
-                contrasts=l.lmerTest.private.contrast, 
-                devFunOnly = devFunOnly.lmerTest.private, 
- #               data = data.update.lmerTest.private,
-                evaluate=FALSE)
- env <- environment(formula(model))
- assign("l.lmerTest.private.contrast", l.lmerTest.private.contrast, envir=env)
- assign("reml.lmerTest.private", reml.lmerTest.private, envir=env)
- assign("devFunOnly.lmerTest.private", devFunOnly.lmerTest.private, envir=env)
- #assign("data.update.lmerTest.private", data.update.lmerTest.private, envir=env)
- nfit <- eval(nfit, envir = env) 
- return(nfit)   
+  if (length(extras) > 0) {
+    existing <- !is.na(match(names(extras), names(call)))
+    for (a in names(extras)[existing]) call[[a]] <- extras[[a]]
+    if (any(!existing)) {
+      call <- c(as.list(call), extras[!existing])
+    }
+  }
+  if(change.contr){
+    mm <- model.matrix(object)
+    contr <- attr(mm,"contrasts")
+    ## change contrasts for F tests calculations
+    ## list of contrasts for factors
+    if(change.contr && length(which(unlist(contr)!="contr.SAS")) > 0)
+    {
+      names.facs <- names(contr)
+      l.lmerTest.private.contrast <- as.list(rep("contr.SAS",length(names.facs)))
+      names(l.lmerTest.private.contrast) <- names(contr)
+      call[["contrasts"]] <- l.lmerTest.private.contrast
+    }
+    else if(!is.null(contr)){
+      call[["contrasts"]] <- contr[names(contr) %in% attr(terms(call$formula),"term.labels")]
+    }
+  }
+  call <- as.call(call)
+  ff <- environment(formula(object))
+  pf <- parent.frame()  ## save parent frame in case we need it
+  sf <- sys.frames()[[1]]
+  ff2 <- environment(object)
+  tryCatch(eval(call, envir=ff),
+           error=function(e) {
+             tryCatch(eval(call, envir=sf),
+                      error=function(e) {
+                        tryCatch(eval(call, envir=pf),
+                         error=function(e) {
+                           eval(call, envir=ff2)
+                         })})})
 }
+
 
 checkNameDDF <- function(ddf){
   ddfs <- c("Satterthwaite", "Kenward-Roger")

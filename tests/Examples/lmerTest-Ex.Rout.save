@@ -97,7 +97,8 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
 Final model:
 lme4::lmer(formula = log(Coloursaturation) ~ TVset + Picture + 
-    (1 | Assessor:TVset) + TVset:Picture, data = TVbo)
+    (1 | Assessor:TVset) + TVset:Picture, data = TVbo, contrasts = list(
+    TVset = "contr.SAS", Picture = "contr.SAS"))
 > ## End(Don't show)
 > 
 > ## Not run: 
@@ -178,6 +179,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 > ## Not run: 
 > ##D fm2 <- lmer(Preference ~ sens2 + I(sens1^2)  +
 > ##D                            (1+sens2|Consumer), data=carrots)
+> ##D anova(fm2)
 > ## End(Not run)
 > ## End(Don't show)
 > 
@@ -310,7 +312,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
 Final model:
 lme4::lmer(formula = Preference ~ sens2 + Homesize + (1 + sens2 | 
-    Consumer), data = carrots)
+    Consumer), data = carrots, contrasts = list(Homesize = "contr.SAS"))
 > 
 > 
 > 
@@ -456,7 +458,8 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
 Final model:
 lme4::lmer(formula = Informed.liking ~ Product * Information * 
-    Gender + (1 | Product:Consumer), data = ham)
+    Gender + (1 | Product:Consumer), data = ham, contrasts = list(
+    Product = "contr.SAS", Information = "contr.SAS", Gender = "contr.SAS"))
 > 
 > 
 > 
@@ -990,7 +993,7 @@ Days -0.138
 > ###
 > options(digits = 7L)
 > base::cat("Time elapsed: ", proc.time() - base::get("ptime", pos = 'CheckExEnv'),"\n")
-Time elapsed:  9.95 0.2 10.2 NA NA 
+Time elapsed:  8.87 0.17 9.18 NA NA 
 > grDevices::dev.off()
 null device 
           1 

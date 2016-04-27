@@ -36,8 +36,6 @@ stepFun <- function(model, ddf = "Satterthwaite", type = 3,
     return(result)
   }
   
- 
- 
   ## analysis of the random part  
   result.rand <- elimRandEffs(model, alpha.random, reduce.random, 
                               keep.effs$randeffs)  
@@ -65,7 +63,8 @@ stepFun <- function(model, ddf = "Satterthwaite", type = 3,
   stop = FALSE
   is.first.anova <- TRUE
   is.first.sign <- TRUE  
-  rho <- new.env(parent = emptyenv()) ## environment containing info about model
+  rho <- list() ## environment containing info about model
+  rho <- rhoInit(rho, model, change.contr)
   
   while(!stop)
   {      
@@ -77,8 +76,6 @@ stepFun <- function(model, ddf = "Satterthwaite", type = 3,
       break
     }   
     
-    rho <- rhoInit(rho, model, change.contr)
-    change.contr <- FALSE ## only change the contrast the first time
     rho$A <- calcApvar(rho) ## asymptotic variance-covariance matrix for theta and sigma  
     rho$Xlist <- createDesignMat(rho) ## X design matrix for fixed effects
   
@@ -108,12 +105,12 @@ stepFun <- function(model, ddf = "Satterthwaite", type = 3,
     else
     {
       resNSelim <- elimNSFixedTerm(rho, anova.table, alpha.fixed, 
-                                   elim.num, keep.effs$fixedeffs)
+                                   elim.num, keep.effs$fixedeffs, change.contr)
       if(is.null(resNSelim))
         break
       else
       {
-        model <- resNSelim$model
+        rho <- resNSelim$rho
         anova.table <- updateAnovaTable(resNSelim)
         elim.num <- elim.num + 1
       }        
@@ -156,10 +153,10 @@ stepFun <- function(model, ddf = "Satterthwaite", type = 3,
   result$rand.table <- formatElimNumTable(result$rand.table) 
   
   ## save model
-  if(inherits(model, "merMod"))
-    model <- as(model,"merModLmerTest")
+  if(inherits(rho$model, "merMod"))
+    model <- as(rho$model,"merModLmerTest")
   
-  result$model <- model
+  result$model <- rho$model
   return(result)
 }
 
@@ -167,7 +164,7 @@ stepFun <- function(model, ddf = "Satterthwaite", type = 3,
 ################################################################################
 ## find NS effect from the model (starting from highest order interactions)
 ################################################################################
-getNSFixedTerm <- function(model, anova.table, data, alpha, keep.effs = NULL)
+getNSFixedTerm <- function(anova.table, alpha, keep.effs = NULL)
 {
   
   pv.max <- 0
@@ -199,10 +196,10 @@ getNSFixedTerm <- function(model, anova.table, data, alpha, keep.effs = NULL)
 ################################################################################
 ## eliminate NS fixed effect from the model
 ################################################################################
-elimNSFixedTerm <- function(rho, anova.table, alpha, elim.num, keep.effs = NULL)
+elimNSFixedTerm <- function(rho, anova.table, alpha, elim.num, 
+                            keep.effs = NULL, change.contr)
 {
-  ns.term <- getNSFixedTerm(rho$model, anova.table, rho$data, alpha, 
-                            keep.effs = keep.effs)
+  ns.term <- getNSFixedTerm(anova.table, alpha, keep.effs = keep.effs)
   if( is.null(ns.term) )
     return(NULL)
   anova.table[ns.term, "elim.num"] <- elim.num
@@ -210,11 +207,11 @@ elimNSFixedTerm <- function(rho, anova.table, alpha, elim.num, keep.effs = NULL)
   fm[3] <- paste(fm[3], "-", ns.term)
   
   mf.final <- as.formula(paste(fm[2], fm[1], fm[3], sep=""))
+
+  rho <- rhoInit(rho, rho$model, change.contr = change.contr, mf.final = mf.final)
+
   
-  model <- updateModel(rho$model, mf.final, getME(rho$model, "is_REML"), 
-                       rho$contr) 
-  
-  return( list(model=model, anova.table=anova.table) )
+  return(list(rho = rho, anova.table = anova.table))
 }
 
 ###############################################################################
@@ -367,7 +364,7 @@ formatElimNumTable <- function(table)
 
 
 updateAnovaTable <- function(resNSelim){
-  anm <- anova(resNSelim$model)
+  anm <- anova(resNSelim$rho$model)
   anova.table <- resNSelim$anova.table
   anova.table[rownames(anm), c("Sum Sq", "Mean Sq", "NumDF")] <-
     as.matrix(anm[, c("Sum Sq", "Mean Sq", "Df")])
