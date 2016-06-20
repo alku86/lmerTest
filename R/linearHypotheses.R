@@ -63,7 +63,7 @@ makeContrastType3SAS <- function(model, term, L)
     for(i in setdiff(1:nrow(L),zero.row))
     {
       if(sum(abs(L[i,]))!=0)
-        L[i,] <- L[i,]-((w %*% L[i,])/(w %*% w)) %*% w
+        L[i,] <- L[i,] - ((w %*% L[i,])/(w %*% w)) %*% w
     }
     L[zero.row,] <- rep(0,ncol(L))
   }
@@ -75,40 +75,8 @@ makeContrastType3SAS <- function(model, term, L)
   return(L)
 }
 
-################################################################################
-## type 2 hypothesis SAS
-################################################################################
-makeContrastType2 <- function(term, L, rho){
-  #find all effects that contain term effect
-  model.term <- terms(rho$model)
-  fac <- attr(model.term,"factors")
-  names <- attr(model.term,"term.labels")
-  classes.term <- attr(terms(rho$model, FALSE), "dataClasses")
-  
-  find.term <- which(colnames(rho$Xlist$X.design) == term)
-  num.relate <- relatives(classes.term, term, names, fac)
-  contain <- names[num.relate]
-  if(length(contain) == 0 && (which(names == term) == length(names))){
-    Lc <- L[find.term[which(find.term %in% rho$Xlist$nums.Coefs)],]            
-  }
-  else{
-    ind.indep <- which(colnames(rho$Xlist$X.design) != term & 
-                         !(colnames(rho$Xlist$X.design) %in% contain))
-    new.X <- cbind(rho$Xlist$X.design[,ind.indep], rho$Xlist$X.design[,-ind.indep])
-    XtX <- crossprod(new.X)
-    U <- doolittle(XtX)$U
-    d <- diag(U)
-    for(i in 1:nrow(U))
-      if(d[i] > 0) U[i, ] <- U[i, ] / d[i]
-    L <- U
-    colnames(L) <- rownames(L) <-  
-      c(names(rho$Xlist$fullCoefs)[ind.indep], names(rho$Xlist$fullCoefs)[-ind.indep])
-    Lc <- L[which(colnames(new.X) == term), , drop = FALSE]
-    Lc <- Lc[which(rownames(Lc) %in% names(rho$Xlist$nums.Coefs)), , drop = FALSE]
-    Lc <- Lc[, names(rho$Xlist$fullCoefs), drop = FALSE]
-  }  
-  Lc
-}
+
+
 
 ################################################################################
 ###  type 1 SS
@@ -160,6 +128,9 @@ createDesignMat <- function(rho)
   model.term <- terms(rho$model)
   fixed.term <- attr(model.term,"term.labels") 
   X.design <- names.design.mat <-  names.design <- NULL
+  X.design.red <- model.matrix(rho$model)
+  attr(X.design.red, "dataClasses") <- 
+    attr(terms(rho$model, FALSE), "dataClasses")
   dd <- model.frame(rho$model) 
   
   for(i in 1:length(fixed.term))
@@ -186,10 +157,18 @@ createDesignMat <- function(rho)
     names(fullCoefs)[1] <- "(Intercept)"
   fullCoefs[names(rho$fixEffs)] <- rho$fixEffs
   nums.Coefs <- which(names(fullCoefs) %in% names(rho$fixEffs))
-  nums.Coefs <- setNames(nums.Coefs, names(fullCoefs[nums.Coefs]))  
-  
-  return(list(X.design = X.design, names.design = names.design,
-              fullCoefs = fullCoefs, nums.Coefs = nums.Coefs))
+  nums.Coefs <- setNames(nums.Coefs, names(fullCoefs[nums.Coefs])) 
+  # Xlist <- updateXdesign(rho, list(X.design = X.design,
+  #                                names.design = names.design,
+  #                                fullCoefs = fullCoefs,
+  #                                nums.Coefs = nums.Coefs))
+  Xlist <- list(X.design.red = X.design.red, 
+                trms = model.term,
+                X.design = X.design,
+                names.design = names.design,
+                fullCoefs = fullCoefs,
+                nums.Coefs = nums.Coefs)
+  return(Xlist)
 }
 
 
@@ -197,17 +176,16 @@ createDesignMat <- function(rho)
 calcGeneralSet<- function(rho, type)
 {
   if(type == 3)
-    L <- calcGeneralSetType3(rho)  
+    L <- calcGeneralSetType3(rho) #basis.set3(rho)#calcGeneralSetType3(rho)  
   else
   {
-    X <- rho$Xlist$X.design
-    p <- ncol(X)
-    XtX <- crossprod(X)
-    U <- doolittle(XtX)$U
-    d <- diag(U)
-    for(i in 1:nrow(U))
-      if(d[i] > 0) U[i, ] <- U[i, ] / d[i]
-    L <- U
+    L <- calcGeneralSet12(rho$Xlist$X.design.red)
+    if(type == 1)
+      L <- makeContrastType1(L, rho$Xlist$X.design.red, 
+                             rho$Xlist$trms, rho$test.terms)
+    if(type == 2)
+      L <- makeContrastType2(L, rho$Xlist$X.design.red, 
+                             rho$Xlist$trms, rho$test.terms)
   }
   L
 }
@@ -217,7 +195,7 @@ calcGeneralSet<- function(rho, type)
 calcGeneralSetType3 <- function(rho)
 {
   xtx <- t(rho$Xlist$X.design) %*% rho$Xlist$X.design
-  g2 <- matrix(0,ncol=ncol(xtx), nrow=nrow(xtx))
+  g2 <- matrix(0, ncol=ncol(xtx), nrow=nrow(xtx))
   
   inds <- rho$Xlist$nums.Coefs
   g2[inds,inds] <- solve(xtx[inds,inds])
@@ -228,6 +206,7 @@ calcGeneralSetType3 <- function(rho)
   L[abs(L)<1e-6] <- 0
   L
 }
+
 
 
 ## find which effect contains effect term
@@ -255,4 +234,78 @@ relatives <- function(classes.term, term, names, factors)
                                         function(term2) is.relative(term, term2))]
 }
 
+
+
+
+makeContrastType2 <- function(L, X, trms, trms.lab){
+  fac <- attr(trms,"factors")
+  #trms.lab <- attr(trms,"term.labels")
+  trms.assig <- attr(X, "assign")
+  if(attr(trms,"intercept") == 0)
+    attr(X, "assign") <- setNames(trms.assig, rep(trms.lab, 
+                                                  table(trms.assig)))
+  else
+    attr(X, "assign") <- setNames(trms.assig, rep(c("(Intercept)", trms.lab), 
+                                                  table(trms.assig)))
+  Lt.list <- lapply(trms.lab, function(trm)
+    makeContrastType2.term(trm, L, X, trms.lab, fac))
+  names(Lt.list) <- trms.lab
+  Lt.list
+}
+
+
+makeContrastType2.term <- function(trm, L, X, trms.lab, fac){
+  #find all effects that contain term effect
+  num.relate <- relatives(attr(X, "dataClasses"), trm, trms.lab, fac)
+  contain <- trms.lab[num.relate]
+  if(length(contain) == 0 && (which(trms.lab == trm) == length(trms.lab))){
+    Lc <- L[which(names(attr(X, "assign")) == trm), , drop = FALSE] 
+    colnames(Lc) <- colnames(X)
+    Lc
+  }
+  else{
+    ## columns of the X are rearranged in a way that columns corresponding to the 
+    ## effects that do not contain effet term are put before the columns corresponding 
+    ## to the term
+    ind.indep <- which(names(attr(X, "assign")) != trm & 
+                         !(names(attr(X, "assign")) %in% contain))
+    new.X <- cbind(X[,ind.indep, drop = FALSE], X[,-ind.indep, drop = FALSE])
+    attr(new.X, "assign") <- c(attr(X, "assign")[ind.indep], attr(X, "assign")[-ind.indep])
+    ## doolittle transform t(new.X) %*% new.X
+    L <- calcGeneralSet12(new.X)
+    colnames(L) <- colnames(new.X)
+    ## columns of L are rearranged to reflect the original order
+    Lc <- L[which(names(attr(new.X, "assign")) == trm), , drop = FALSE]
+    Lc <- Lc[, colnames(X), drop = FALSE]
+  }
+  Lc
+}
+
+
+makeContrastType1 <- function(L, X, trms, trms.lab){
+  asgn <- attr(X, "assign")
+  #trms.lab <- attr(trms, "term.labels")
+  p <- ncol(X)
+  ind.list <- split(1L:p, asgn)
+  df <- unlist(lapply(ind.list, length))
+  Lt.master <- L
+  Lt.list <- lapply(ind.list, function(i) Lt.master[i, , drop=FALSE])
+  if(attr(trms,"intercept") == 0)
+    names(Lt.list) <- trms.lab
+  else
+    names(Lt.list) <- c("(Intercept)", trms.lab)
+  Lt.list
+}
+
+
+calcGeneralSet12 <- function(X){
+  p <- ncol(X)
+  XtX <- crossprod(X)
+  U <- doolittle(XtX)$U
+  d <- diag(U)
+  for(i in 1:nrow(U))
+    if(d[i] > 0) U[i, ] <- U[i, ] / d[i]
+  L <- U
+  L
+}
 

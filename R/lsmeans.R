@@ -314,10 +314,20 @@ fillLSMEANStab <- function(mat, rho, summ.eff, nfacs, alpha, ddf = "Satterthwait
 {
 
   newcln <- colnames(mat)[colnames(mat) %in% names(rho$fixEffs)]
+  ## check estimability
+  if(sum(!colnames(mat) %in% names(rho$fixEffs)) > 0){
+    ids.est <- checkForEstim(mat, rho)
+    mat <- mat[ids.est, , drop = FALSE]
+  }else{
+    ids.est <- 1:nrow(mat)
+  }
+  if(length(ids.est) == 0)
+    return(summ.eff)
   mat <- matrix(mat[,colnames(mat) %in% names(rho$fixEffs)], nrow=nrow(mat), 
                 ncol=length(newcln), dimnames=list(rownames(mat),  newcln))
+  
   estim.lsmeans <- mat %*% rho$fixEffs
-  summ.eff[,nfacs+1] <- estim.lsmeans  
+  summ.eff[ids.est, nfacs+1] <- estim.lsmeans  
 
   if(ddf == "Satterthwaite")
     ttest.res <- aaply(t(mat), .margins=2,
@@ -328,16 +338,18 @@ fillLSMEANStab <- function(mat, rho, summ.eff, nfacs, alpha, ddf = "Satterthwait
   if(is.vector(ttest.res))
     ttest.res <- t(as.matrix(ttest.res))
 
-  summ.eff[,nfacs+2] <- ttest.res[,4]#stdErrLSMEANS(rho, std.rand, mat)
+  summ.eff[ids.est, nfacs+2] <- ttest.res[,4]#stdErrLSMEANS(rho, std.rand, mat)
   #df
-  summ.eff[,(nfacs+3)] <- ttest.res[,1]
+  summ.eff[ids.est, (nfacs+3)] <- ttest.res[,1]
   #t values
-  summ.eff[,(nfacs+4)] <- ttest.res[,2]
+  summ.eff[ids.est, (nfacs+4)] <- ttest.res[,2]
   #p values
-  summ.eff[,(nfacs+7)] <- ttest.res[,3]
+  summ.eff[ids.est, (nfacs+7)] <- ttest.res[,3]
   # CIs
-  summ.eff[,nfacs+5] <- estim.lsmeans-abs(qt(alpha/2,ttest.res[,1]))*ttest.res[,4]
-  summ.eff[,nfacs+6] <- estim.lsmeans+abs(qt(alpha/2,ttest.res[,1]))*ttest.res[,4]
+  summ.eff[ids.est, nfacs+5] <- estim.lsmeans - 
+    abs(qt(alpha/2,ttest.res[,1])) * ttest.res[,4]
+  summ.eff[ids.est ,nfacs+6] <- estim.lsmeans + 
+    abs(qt(alpha/2,ttest.res[,1])) * ttest.res[,4]
   return(summ.eff)
 }
 

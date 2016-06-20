@@ -4,21 +4,27 @@ calcANOVA <- function(model, ddf = "Satterthwaite", type = 3, change.contr = TRU
     stop('Parameter type is wrongly specified') ## check type of hypothesis
   
   rho <- list() ## environment containing info about model
-  rho <- rhoInit(rho, model, TRUE) ## save lmer outcome in rho envir variable
+  if(type == 3)
+    change.contr <- TRUE
+  else
+    change.contr <- FALSE
+  rho <- rhoInit(rho, model, change.contr) ## save lmer outcome in rho envir variable
 
   if(ddf == "Satterthwaite")
     rho$A <- calcApvar(rho) ## asymptotic variance-covariance matrix for theta and sigma  
 
   rho$Xlist <- createDesignMat(rho) ## X design matrix for fixed effects
-
-  test.terms <- attr(terms(rho$model),"term.labels") ## define the terms that are to be tested
   
-  anova.table <- initAnovaTable(rho$model, test.terms, FALSE) ## initialize anova table
+  ## define the terms that are to be tested
+  rho$test.terms <- attr(terms(rho$model),
+                     "term.labels")[unique(attr(rho$Xlist$X.design.red, 
+                                                "assign"))] 
+  anova.table <- initAnovaTable(rho$model, rho$test.terms, FALSE) ## initialize anova table
 
   ## calculate general set of hypothesis matrix 
   L <- calcGeneralSet(rho, type) 
   
-  resultFpvalueSS <- llply(test.terms, calcFpvalueMAIN, L = L, 
+  resultFpvalueSS <- llply(rho$test.terms, calcFpvalueMAIN, L = L, 
                            rho = rho, 
                            ddf = ddf, type = type)
   ## fill anova table
@@ -58,13 +64,15 @@ calcFpvalueSS <- function(Lc, rho, ddf, type)
   #ss = 1##getSS(Lc, fullCoefs, ginv(crossprod(X.design)))
   
   # for running rune's vcov function
+  ## TODO: UNCOMMENT (commented because of use ...type3.red)
   if(is.vector(Lc))
-  {      
+  {
     Lc <- Lc[rho$Xlist$nums.Coefs]
-  }  
+  }
   else
-  {      
-    Lc <- Lc[ , rho$Xlist$nums.Coefs]
+  {
+    if(type == 3)
+      Lc <- Lc[ , rho$Xlist$nums.Coefs]
   }
 
   if(ddf=="Kenward-Roger")
@@ -90,12 +98,11 @@ calcFpvalueMAIN <- function(term, L, rho, ddf, type)
   }
   if(type == 1)
   {
-    find.term <- which(colnames(rho$Xlist$X.design) == term)
-    Lc <- L[find.term[which(find.term %in% rho$Xlist$nums.Coefs)], ]  
+    Lc <- L[[term]]
     return(c(calcFpvalueSS(Lc, rho, ddf, type), list(name=term))) 
   } 
   if(type == 2){
-    Lc <- makeContrastType2(term, L, rho)
+    Lc <- L[[term]]
     return(c(calcFpvalueSS(Lc, rho, ddf, type), list(name=term))) 
   }
 }

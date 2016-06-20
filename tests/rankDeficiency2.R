@@ -13,8 +13,8 @@ TOL <- 1e-4 # for the check
 #with 4 decimals should agree with SAS output
 #numbers vefore decimals should agree with SAS output
 stopifnot(
-  all.equal(an.carrots[,"Pr(>F)"], c(0.3541, 0.0838, 0.2879, 0.3263, 0.6173, 0.2652, NA), tol = TOL), 
-  all.equal(round(an.carrots$DenDF), c(77, 77, 77, 77, 77, 77, NA))
+  all.equal(an.carrots[,"Pr(>F)"], c(0.3541, 0.0838, 0.2879, 0.3263, 0.6173, 0.2652), tol = TOL), 
+  all.equal(round(an.carrots$DenDF), c(77, 77, 77, 77, 77, 77))
   , TRUE)
 
 

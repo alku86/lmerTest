@@ -1,5 +1,5 @@
 
-R version 3.2.5 (2016-04-14) -- "Very, Very Secure Dishes"
+R Under development (unstable) (2016-06-18 r70798) -- "Unsuffered Consequences"
 Copyright (C) 2016 The R Foundation for Statistical Computing
 Platform: x86_64-w64-mingw32/x64 (64-bit)
 
@@ -195,7 +195,7 @@ detaching 'package:pbkrtest'
 > flush(stderr()); flush(stdout())
 > 
 > ### Name: calcSatterth
-> ### Title: F-test based with the Satterthwaite's approximation for
+> ### Title: F-test based on the Satterthwaite's approximation for
 > ###   denominator degrees of freedom.
 > ### Aliases: calcSatterth
 > ### Keywords: function
@@ -993,7 +993,7 @@ Days -0.138
 > ###
 > options(digits = 7L)
 > base::cat("Time elapsed: ", proc.time() - base::get("ptime", pos = 'CheckExEnv'),"\n")
-Time elapsed:  8.87 0.17 9.18 NA NA 
+Time elapsed:  7.99 0.08 8.1 NA NA 
 > grDevices::dev.off()
 null device 
           1 

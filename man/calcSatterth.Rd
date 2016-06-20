@@ -2,10 +2,10 @@
 \alias{calcSatterth}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
- F-test based with the Satterthwaite's approximation for denominator degrees of freedom.
+ F-test based on the Satterthwaite's approximation for denominator degrees of freedom.
 }
 \description{
- Produces a list with the values for approximate F-test based on the Satterthwaite's approximation.
+ Produces a list with the values for an approximate F-test based on the Satterthwaite's approximation.
 }
 
 \usage{

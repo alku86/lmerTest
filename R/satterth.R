@@ -155,7 +155,7 @@ calcApvar <- function(rho){
   
   ch <- try(chol(h), silent=TRUE)
   if(inherits(ch, "try-error")) {
-    message("Model is not identifiable...")
+    message("Error in calculation of the Satterthwaite's approximation. The output of lme4 package is returned")
   }
   A <- 2*chol2inv(ch)
   

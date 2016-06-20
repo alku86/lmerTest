@@ -71,42 +71,12 @@ saveResultsFixModel <- function(result, model, type = 3)
   return(result)
 }
 
-
-
 getREML <- function(model)
 {
   if(inherits(model,"merMod"))
     return(getME(model, "is_REML"))
 
 }
-
-#update model
-# updateModel <- function(model, mf.final, reml.lmerTest.private,
-#                         l.lmerTest.private.contrast,
-#                         devFunOnly.lmerTest.private = FALSE)
-# {
-#   if(!mf.final == as.formula(paste(".~.")))
-#   {
-#     inds <-  names(l.lmerTest.private.contrast) %in% attr(terms(as.formula(mf.final)),
-#                                                           "term.labels")
-#      #update contrast l.lmerTest.private.contrast
-#     l.lmerTest.private.contrast <- l.lmerTest.private.contrast[inds]
-#   }
-# 
-#  data.update.lmerTest.private <- model.frame(model)
-#  nfit <- update(object=model, formula.=mf.final, REML=reml.lmerTest.private ,
-#                 contrasts=l.lmerTest.private.contrast,
-#                 devFunOnly = devFunOnly.lmerTest.private,
-#                 data = data.update.lmerTest.private, subset = NULL,
-#                 evaluate=FALSE)
-#  env <- environment(formula(model))
-#  assign("l.lmerTest.private.contrast", l.lmerTest.private.contrast, envir=env)
-#  assign("reml.lmerTest.private", reml.lmerTest.private, envir=env)
-#  assign("devFunOnly.lmerTest.private", devFunOnly.lmerTest.private, envir=env)
-#  assign("data.update.lmerTest.private", data.update.lmerTest.private, envir=env)
-#  nfit <- eval(nfit, envir = env)
-#  return(nfit)
-# }
 
 
 updateModel <- function(object, mf.final = NULL, ..., change.contr = FALSE) {
@@ -166,6 +136,17 @@ checkNameDDF <- function(ddf){
   else
     ddf <- ddfs[ind.ddf]
   ddf
+}
+
+
+
+checkForEstim <- function(mat, rho){
+  if (!requireNamespace("estimability", quietly = TRUE)) 
+    stop("estimability package required to check for estimability")
+  contr <- attr(rho$model@pp$X, "contrasts")
+  mm <- model.matrix(terms(rho$model), rho$model@frame, contrasts.arg=contr)
+  nbasis <- estimability::nonest.basis(mm)
+  return(which(apply(mat, 1, function(x) estimability::is.estble(x, nbasis))))
 }
 
 

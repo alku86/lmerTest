@@ -10,7 +10,7 @@ import(ggplot2)
 importFrom("stats", "terms", "as.formula", "complete.cases", "delete.response", 
            "drop1", "formula", "lm", "logLik", "model.frame", "model.matrix", 
            "pchisq", "pf", "printCoefmat", "pt", "qt", "setNames", 
-           "update.formula", "vcov")
+           "update.formula", "vcov", "getCall")
 importFrom("utils", "as.roman", "combn", "data")
 
 
